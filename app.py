@@ -1,91 +1,90 @@
 import os
-import openai
+import smtplib
+import requests
+import datetime
+from bs4 import BeautifulSoup
+from openai import OpenAI
 from dotenv import load_dotenv
-import gradio as gr
-import base64
-import email
-import imaplib
-import PyPDF2
+from fpdf import FPDF
+from email.message import EmailMessage
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
+EMAIL_RECEIVER = os.getenv("EMAIL_RECEIVER")
 
-# Configure OpenAI API
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-def get_latest_pdf_attachment():
+# Fetch WBPSC and WBCS notification text
+def get_wbpsc_updates():
     try:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com")
-        mail.login(EMAIL_USER, EMAIL_PASS)
-        mail.select("inbox")
+        url = "https://wbpsc.gov.in/"
+        r = requests.get(url)
+        soup = BeautifulSoup(r.content, "html.parser")
+        latest = soup.find("marquee")
+        return latest.get_text(strip=True) if latest else "No update found"
+    except:
+        return "Error fetching WBPSC updates."
 
-        result, data = mail.search(None, "ALL")
-        mail_ids = data[0].split()
-        for num in reversed(mail_ids):
-            result, msg_data = mail.fetch(num, "(RFC822)")
-            msg = email.message_from_bytes(msg_data[0][1])
+# Fake UPSC update fetcher (replace with real logic if needed)
+def get_upsc_current_affairs():
+    return """India signs green hydrogen pact with EU. RBI keeps repo rate unchanged at 6.5%. Parliament to reconvene on July 10."""
 
-            if msg.get_content_maintype() != "multipart":
-                continue
+# Generate summary using OpenAI
+def generate_summary(text):
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "Summarize this for a daily UPSC/WBPSC aspirant:"},
+            {"role": "user", "content": text[:4000]}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
-            for part in msg.walk():
-                if part.get_content_maintype() == "multipart":
-                    continue
-                if part.get("Content-Disposition") is None:
-                    continue
+# Create PDF
+def create_pdf(content, filename="summary.pdf"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", size=12)
+    for line in content.split('\n'):
+        pdf.multi_cell(0, 10, line)
+    pdf.output(filename)
 
-                filename = part.get_filename()
-                if filename and filename.endswith(".pdf"):
-                    return part.get_payload(decode=True), filename
-        return None, "No PDF found"
-    except Exception as e:
-        return None, str(e)
+# Email with summary and PDF
+def send_email(subject, body, attachment_path):
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_USER
+    msg["To"] = EMAIL_RECEIVER
+    msg.set_content(body)
 
-def summarize_pdf():
-    pdf_data, filename = get_latest_pdf_attachment()
-    if not pdf_data:
-        return f"Error: {filename}"
+    with open(attachment_path, "rb") as f:
+        file_data = f.read()
+        file_name = os.path.basename(attachment_path)
+        msg.add_attachment(file_data, maintype="application", subtype="pdf", filename=file_name)
 
-    # Save the PDF temporarily
-    temp_pdf_path = "latest.pdf"
-    with open(temp_pdf_path, "wb") as f:
-        f.write(pdf_data)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(EMAIL_USER, EMAIL_PASS)
+        smtp.send_message(msg)
 
-    # Read PDF content
-    reader = PyPDF2.PdfReader(temp_pdf_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
+def main():
+    date = datetime.date.today().strftime("%B %d, %Y")
+    upsc_news = get_upsc_current_affairs()
+    wbpsc_news = get_wbpsc_updates()
 
-    # Limit to 4000 characters (OpenAI input limit)
-    text = text[:4000]
+    combined = f"""📰 UPSC Current Affairs:\n{upsc_news}\n\n🏛 WBPSC/WBCS Notification:\n{wbpsc_news}"""
+    summary = generate_summary(combined)
 
-    # Generate summary
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that summarizes documents."},
-                {"role": "user", "content": f"Summarize the following PDF content:\n\n{text}"}
-            ]
-        )
-        summary = response.choices[0].message["content"]
-        return summary
-    except Exception as e:
-        return f"OpenAI Error: {e}"
-
-# Gradio Interface
-iface = gr.Interface(
-    fn=summarize_pdf,
-    inputs=[],
-    outputs="text",
-    title="📄 Email PDF Summarizer",
-    description="Connects to Gmail, fetches the latest PDF, and summarizes it using OpenAI GPT-4"
-)
+    create_pdf(summary, "Daily_Updates.pdf")
+    send_email(
+        subject=f"📬 Daily UPSC + WBPSC/WBCS Update — {date}",
+        body=summary,
+        attachment_path="Daily_Updates.pdf"
+    )
+    print("✅ Email sent successfully!")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))
-    iface.launch(server_name="0.0.0.0", server_port=port)
+    main()

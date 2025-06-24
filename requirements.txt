@@ -1,4 +1,5 @@
-openai>=1.0.0
+openai
+fpdf
 python-dotenv
-gradio
-PyPDF2
+requests
+beautifulsoup4

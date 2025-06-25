@@ -47,12 +47,19 @@ def generate_pdf(content, filename="notification.pdf"):
     pdf.output(filename)
 
 def send_email(subject, body, attachment_path):
+    print("[*] Sending email...")
     msg = MIMEMultipart()
     msg["From"] = sender_email
     msg["To"] = receiver_email
     msg["Subject"] = subject
+
+    # Add plain text body (ensure it's not empty)
+    if not body.strip():
+        body = "No notifications found."
+
     msg.attach(MIMEText(body, "plain"))
 
+    # Attach PDF
     with open(attachment_path, "rb") as f:
         part = MIMEApplication(f.read(), Name="notification.pdf")
         part["Content-Disposition"] = 'attachment; filename="notification.pdf"'
@@ -64,11 +71,13 @@ def send_email(subject, body, attachment_path):
             server.login(sender_email, app_password)
             server.send_message(msg)
         print("[✓] Email sent successfully.")
+    except smtplib.SMTPAuthenticationError as e:
+        print("[!] SMTP Authentication error:", e)
     except Exception as e:
         print("[!] Failed to send email:", e)
 
 if __name__ == "__main__":
-    print("[*] Running script at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    content = scrape_indgovtjobs()
-    generate_pdf(content)
-    send_email("WBPSC/WBCS Notification Update", content, "notification.pdf")
+    print("[*] Running notification script at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    message = scrape_notifications()
+    generate_pdf(message)
+    send_email("WBPSC/WBCS Notification Update", message, "notification.pdf")

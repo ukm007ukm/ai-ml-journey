@@ -1,5 +1,3 @@
-openai
-fpdf
-python-dotenv
 requests
 beautifulsoup4
+fpdf

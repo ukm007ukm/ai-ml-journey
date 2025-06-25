@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
+import time
 
 # Configuration
 sender_email = "007aiyt@gmail.com"
@@ -14,31 +15,47 @@ app_password = "ckrfoxotcyxqzgrq"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
+urls = {
+    "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
+    "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
+}
+
+def fetch_with_retries(url, retries=3, delay=5, timeout=100):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                print(f"[!] Attempt {attempt+1} failed. Retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                return f"Error fetching data after {retries} attempts: {e}"
+
 def scrape_notifications():
     print("[*] Scraping WBPSC & WBCS pages...")
-    urls = {
-        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
-        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
-    }
-
     messages = []
+
     for title, url in urls.items():
-        try:
-            response = requests.get(url, timeout=59)
-            soup = BeautifulSoup(response.text, "html.parser")
+        html = fetch_with_retries(url)
+        if html.startswith("Error"):
+            messages.append(f"{title}:\n{html}")
+            continue
 
-            # Simplified logic - customize as needed
-            links = soup.find_all("a", href=True)
-            matches = [link.get_text(strip=True) for link in links if "lecturer" in link.get_text(strip=True).lower() or "wbcs" in link.get_text(strip=True).lower()]
-            
-            if matches:
-                msg = f"{title}:\n" + "\n".join(matches)
-                messages.append(msg)
-            else:
-                messages.append(f"{title}:\nNo new notification as of now.")
+        soup = BeautifulSoup(html, "html.parser")
+        links = soup.find_all("a", href=True)
+        matches = [
+            link.get_text(strip=True)
+            for link in links
+            if "lecturer" in link.get_text(strip=True).lower() or
+               "wbcs" in link.get_text(strip=True).lower()
+        ]
 
-        except Exception as e:
-            messages.append(f"{title}:\nError fetching data: {e}")
+        if matches:
+            messages.append(f"{title}:\n" + "\n".join(matches))
+        else:
+            messages.append(f"{title}:\nNo new notification as of now.")
 
     return "\n\n".join(messages)
 

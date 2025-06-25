@@ -7,38 +7,48 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
 
-# Config
+# Configuration
 sender_email = "007aiyt@gmail.com"
 receiver_email = "7haveli@gmail.com"
 app_password = "ckrfoxotcyxqzgrq"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
-def scrape_indgovtjobs():
-    print("[*] Scraping West Bengal Jobs section...")
-    url = "https://www.indgovtjobs.in/search/label/West%20Bengal%20Jobs"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def scrape_notifications():
+    print("[*] Scraping WBPSC & WBCS pages...")
 
-    response = requests.get(url, headers=headers, timeout=90)
-    soup = BeautifulSoup(response.text, "html.parser")
+    urls = {
+        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
+        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
+    }
 
-    # Grab all post titles and URLs
-    articles = soup.find_all("h3", class_="post-title entry-title")
-    keywords = ["wbpsc", "lecturer", "wbcs", "west bengal civil", "public service"]
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
 
-    matches = []
-    for post in articles:
-        title = post.get_text(strip=True)
-        link = post.find("a")["href"]
+    messages = []
 
-        if any(keyword in title.lower() for keyword in keywords):
-            matches.append(f"{title} - {link}")
+    for title, url in urls.items():
+        try:
+            response = requests.get(url, headers=headers, timeout=20)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
 
-    if not matches:
-        return "No WBPSC/WBCS-specific notifications found as of now."
-    return "\n".join(matches)
+            links = soup.find_all("a", href=True)
+            matches = [link.get_text(strip=True) for link in links if "lecturer" in link.text.lower() or "wbcs" in link.text.lower()]
+
+            if matches:
+                messages.append(f"{title}:\n" + "\n".join(matches))
+            else:
+                messages.append(f"{title}:\nNo WBPSC/WBCS-specific notifications found as of now.")
+
+        except Exception as e:
+            messages.append(f"{title}:\nError fetching data: {e}")
+
+    return "\n\n".join(messages)
 
 def generate_pdf(content, filename="notification.pdf"):
+    print("[*] Generating PDF...")
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -53,13 +63,10 @@ def send_email(subject, body, attachment_path):
     msg["To"] = receiver_email
     msg["Subject"] = subject
 
-    # Add plain text body (ensure it's not empty)
     if not body.strip():
         body = "No notifications found."
-
     msg.attach(MIMEText(body, "plain"))
 
-    # Attach PDF
     with open(attachment_path, "rb") as f:
         part = MIMEApplication(f.read(), Name="notification.pdf")
         part["Content-Disposition"] = 'attachment; filename="notification.pdf"'

@@ -24,7 +24,7 @@ def scrape_notifications():
     messages = []
     for title, url in urls.items():
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=59)
             soup = BeautifulSoup(response.text, "html.parser")
 
             # Simplified logic - customize as needed

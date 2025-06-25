@@ -1,16 +1,16 @@
-name: Run Python Script Every 12 Hours
+name: Run Notification Script Every 12 Hours
 
 on:
   schedule:
-    - cron: "0 */12 * * *"  # Every 12 hours
-  workflow_dispatch:        # Allow manual trigger from GitHub
+    - cron: '0 */12 * * *'  # Runs every 12 hours
+  workflow_dispatch:        # Allows manual run
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -23,8 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run app.py
+      - name: Run the script
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python app.py
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+        run: python app.py

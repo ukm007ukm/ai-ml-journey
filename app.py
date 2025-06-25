@@ -1,70 +1,86 @@
-import os
+import smtplib
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
 from fpdf import FPDF
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
+import os
+from datetime import datetime
+from email.message import EmailMessage
 
-WBPSC_URL = "https://wbpsc.gov.in/"
-ADVT_URL = "https://wbpsc.gov.in/advertisement.jsp"
-KEYWORDS = ["polytechnic lecturer", "WBCS", "West Bengal Civil Service"]
+# ------------------------
+# CONFIGURATION
+# ------------------------
+EMAIL_USER = os.getenv("EMAIL_USER") or "your_email@gmail.com"
+EMAIL_PASS = os.getenv("EMAIL_PASS") or "your_app_password"
+EMAIL_TO = os.getenv("EMAIL_TO") or "your_email@gmail.com"  # where to send
 
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
+# ------------------------
+# FUNCTIONS
+# ------------------------
 
-def fetch_wbpsc_notifications():
+def fetch_notifications():
+    notifications = []
+
     try:
-        res = requests.get(ADVT_URL, timeout=15)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        notifications = soup.find_all("a", href=True)
-        matches = []
+        # WBPSC Polytechnic Lecturer
+        wbpsc_url = 'https://wbpsc.gov.in/'
+        wbpsc_res = requests.get(wbpsc_url, timeout=15)
+        soup = BeautifulSoup(wbpsc_res.text, 'html.parser')
+        if 'polytechnic lecturer' in soup.text.lower():
+            notifications.append("Polytechnic Lecturer notification found.")
 
-        for note in notifications:
-            text = note.get_text(strip=True).lower()
-            if any(kw in text for kw in [k.lower() for k in KEYWORDS]):
-                matches.append(note.get_text(strip=True))
-        return matches if matches else ["No new notification as of now."]
+        # WBCS
+        wbcs_url = 'https://wbpsc.gov.in/'
+        wbcs_res = requests.get(wbcs_url, timeout=15)
+        if 'wbcs' in wbcs_res.text.lower():
+            notifications.append("WBCS notification found.")
+
     except Exception as e:
-        return [f"Error fetching notifications: {str(e)}"]
+        notifications.append(f"Error fetching notifications: {e}")
 
-def save_to_pdf(lines, filename):
+    if not notifications:
+        notifications.append("No new notifications as of now.")
+
+    return notifications
+
+def generate_pdf(notifications):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    for line in lines:
-        pdf.cell(200, 10, txt=line, ln=True)
-    pdf.output(filename)
 
-def send_email(body_lines, pdf_path):
-    msg = MIMEMultipart()
+    pdf.cell(200, 10, txt="WBPSC & WBCS Notification Update", ln=1, align='C')
+    pdf.cell(200, 10, txt=datetime.now().strftime("%Y-%m-%d %H:%M"), ln=2, align='C')
+    pdf.ln(10)
+
+    for note in notifications:
+        pdf.multi_cell(0, 10, note)
+
+    file_path = "notification_update.pdf"
+    pdf.output(file_path)
+    return file_path
+
+def send_email(notifications, pdf_path):
+    msg = EmailMessage()
+    msg['Subject'] = 'WBPSC & WBCS Notification Update'
     msg['From'] = EMAIL_USER
-    msg['To'] = RECEIVER_EMAIL
-    msg['Subject'] = "WBPSC/WBCS Notification Update"
-
-    msg.attach(MIMEText("\n".join(body_lines), 'plain'))
+    msg['To'] = EMAIL_TO
+    msg.set_content("\n".join(notifications))
 
     with open(pdf_path, 'rb') as f:
-        attach = MIMEApplication(f.read(), _subtype='pdf')
-        attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(pdf_path))
-        msg.attach(attach)
+        file_data = f.read()
+        file_name = os.path.basename(pdf_path)
+        msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
+    with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
+        smtp.starttls()
+        smtp.login(EMAIL_USER, EMAIL_PASS)
+        smtp.send_message(msg)
 
-def main():
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now}] Checking for WBPSC/WBCS updates...")
-
-    results = fetch_wbpsc_notifications()
-    filename = "wbpsc_notifications.pdf"
-    save_to_pdf(results, filename)
-    send_email(results, filename)
-    print("Email sent successfully!")
+# ------------------------
+# MAIN
+# ------------------------
 
 if __name__ == "__main__":
-    main()
+    notes = fetch_notifications()
+    pdf_file = generate_pdf(notes)
+    send_email(notes, pdf_file)
+    print("✅ Notification email sent.")

@@ -6,7 +6,6 @@ import requests
 from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
-import time
 
 # Configuration
 sender_email = "007aiyt@gmail.com"
@@ -15,47 +14,35 @@ app_password = "ckrfoxotcyxqzgrq"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
-urls = {
-    "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
-    "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
-}
-
-def fetch_with_retries(url, retries=3, delay=5, timeout=100):
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, timeout=timeout)
-            response.raise_for_status()
-            return response.text
-        except requests.exceptions.RequestException as e:
-            if attempt < retries - 1:
-                print(f"[!] Attempt {attempt+1} failed. Retrying in {delay}s...")
-                time.sleep(delay)
-            else:
-                return f"Error fetching data after {retries} attempts: {e}"
-
 def scrape_notifications():
     print("[*] Scraping WBPSC & WBCS pages...")
+    urls = {
+        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
+        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
+    }
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0 Safari/537.36"
+    }
+
     messages = []
-
     for title, url in urls.items():
-        html = fetch_with_retries(url)
-        if html.startswith("Error"):
-            messages.append(f"{title}:\n{html}")
-            continue
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            soup = BeautifulSoup(response.text, "html.parser")
 
-        soup = BeautifulSoup(html, "html.parser")
-        links = soup.find_all("a", href=True)
-        matches = [
-            link.get_text(strip=True)
-            for link in links
-            if "lecturer" in link.get_text(strip=True).lower() or
-               "wbcs" in link.get_text(strip=True).lower()
-        ]
+            # Search for relevant links
+            links = soup.find_all("a", href=True)
+            matches = [link.get_text(strip=True) for link in links if "lecturer" in link.get_text(strip=True).lower() or "wbcs" in link.get_text(strip=True).lower()]
 
-        if matches:
-            messages.append(f"{title}:\n" + "\n".join(matches))
-        else:
-            messages.append(f"{title}:\nNo new notification as of now.")
+            if matches:
+                msg = f"{title}:\n" + "\n".join(matches)
+                messages.append(msg)
+            else:
+                messages.append(f"{title}:\nNo new notification as of now.")
+
+        except Exception as e:
+            messages.append(f"{title}:\nError fetching data: {e}")
 
     return "\n\n".join(messages)
 

@@ -33,7 +33,7 @@ def scrape_notifications():
 
     for title, url in SOURCES.items():
         try:
-            response = requests.get(url, headers=HEADERS, timeout=15)
+            response = requests.get(url, headers=HEADERS, timeout=95)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
@@ -46,12 +46,12 @@ def scrape_notifications():
                     matches.append(link.get_text(strip=True))
 
             if matches:
-                messages.append(f"🔔 {title}:\n" + "\n".join(matches[:10]))  # Limit to top 10 links
+                messages.append(f" {title}:\n" + "\n".join(matches[:10]))  # Limit to top 10 links
             else:
-                messages.append(f"🔔 {title}:\nNo WBPSC/WBCS-specific notifications found as of now.")
+                messages.append(f" {title}:\nNo WBPSC/WBCS-specific notifications found as of now.")
 
         except Exception as e:
-            messages.append(f"🔔 {title}:\nError fetching data: {e}")
+            messages.append(f" {title}:\nError fetching data: {e}")
 
     return "\n\n".join(messages)
 

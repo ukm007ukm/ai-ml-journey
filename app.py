@@ -19,7 +19,7 @@ def scrape_indgovtjobs():
     url = "https://www.indgovtjobs.in/"
     headers = {"User-Agent": "Mozilla/5.0"}
     
-    response = requests.get(url, headers=headers, timeout=20)
+    response = requests.get(url, headers=headers, timeout=90)
     soup = BeautifulSoup(response.text, "html.parser")
 
     keywords = ["wbpsc", "lecturer", "wbcs", "west bengal"]

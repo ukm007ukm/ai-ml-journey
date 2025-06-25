@@ -17,8 +17,8 @@ smtp_port = 587
 def scrape_notifications():
     print("[*] Scraping WBPSC & WBCS pages...")
     urls = {
-        "WBPSC Polytechnic Lecturer": "https://wbpsc.gov.in/notice",
-        "WBCS Notifications": "https://wbpsc.gov.in/advertisement.jsp"
+        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
+        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
     }
 
     messages = []

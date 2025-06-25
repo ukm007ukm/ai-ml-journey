@@ -14,36 +14,44 @@ app_password = "ckrfoxotcyxqzgrq"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
+
+# Target URLs for job notifications (English-based and reliable)
+SOURCES = {
+    "WBPSC Official": "https://psc.wb.gov.in/notification_announcement.jsp",
+    "IndGovtJobs - WB": "https://www.indgovtjobs.in/search/label/West%20Bengal%20Jobs",
+    "FreeJobAlert - WB": "https://www.freejobalert.com/west-bengal-jobs/",
+    "SarkariResult - WB": "https://www.sarkariresult.com/state/west-bengal/"
+}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
+
 def scrape_notifications():
-    print("[*] Scraping WBPSC & WBCS pages...")
-
-    urls = {
-        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
-        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
-    }
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-
+    print("[*] Scraping job notifications...")
     messages = []
 
-    for title, url in urls.items():
+    for title, url in SOURCES.items():
         try:
-            response = requests.get(url, headers=headers, timeout=20)
+            response = requests.get(url, headers=HEADERS, timeout=15)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 
             links = soup.find_all("a", href=True)
-            matches = [link.get_text(strip=True) for link in links if "lecturer" in link.text.lower() or "wbcs" in link.text.lower()]
+            matches = []
+
+            for link in links:
+                text = link.get_text(strip=True).lower()
+                if any(keyword in text for keyword in ["lecturer", "wbcs", "psc", "recruitment", "west bengal"]):
+                    matches.append(link.get_text(strip=True))
 
             if matches:
-                messages.append(f"{title}:\n" + "\n".join(matches))
+                messages.append(f"🔔 {title}:\n" + "\n".join(matches[:10]))  # Limit to top 10 links
             else:
-                messages.append(f"{title}:\nNo WBPSC/WBCS-specific notifications found as of now.")
+                messages.append(f"🔔 {title}:\nNo WBPSC/WBCS-specific notifications found as of now.")
 
         except Exception as e:
-            messages.append(f"{title}:\nError fetching data: {e}")
+            messages.append(f"🔔 {title}:\nError fetching data: {e}")
 
     return "\n\n".join(messages)
 
@@ -63,8 +71,6 @@ def send_email(subject, body, attachment_path):
     msg["To"] = receiver_email
     msg["Subject"] = subject
 
-    if not body.strip():
-        body = "No notifications found."
     msg.attach(MIMEText(body, "plain"))
 
     with open(attachment_path, "rb") as f:
@@ -87,4 +93,4 @@ if __name__ == "__main__":
     print("[*] Running notification script at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     message = scrape_notifications()
     generate_pdf(message)
-    send_email("WBPSC/WBCS Notification Update", message, "notification.pdf")
+    send_email("WBPSC/WBCS Job Notifications", message, "notification.pdf")

@@ -7,47 +7,35 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
 
-# Configuration
+# Config
 sender_email = "007aiyt@gmail.com"
 receiver_email = "7haveli@gmail.com"
 app_password = "ckrfoxotcyxqzgrq"
 smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
-def scrape_notifications():
-    print("[*] Scraping WBPSC & WBCS pages...")
-    urls = {
-        "WBPSC Polytechnic Lecturer": "https://psc.wb.gov.in/notification_announcement.jsp",
-        "WBCS Notifications": "https://psc.wb.gov.in/notification_announcement.jsp"
-    }
+def scrape_indgovtjobs():
+    print("[*] Scraping indgovtjobs.in...")
+    url = "https://www.indgovtjobs.in/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    response = requests.get(url, headers=headers, timeout=20)
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0 Safari/537.36"
-    }
+    keywords = ["wbpsc", "lecturer", "wbcs", "west bengal"]
+    links = soup.find_all("a", href=True)
 
-    messages = []
-    for title, url in urls.items():
-        try:
-            response = requests.get(url, headers=headers, timeout=30)
-            soup = BeautifulSoup(response.text, "html.parser")
+    matches = []
+    for link in links:
+        text = link.get_text(strip=True).lower()
+        if any(keyword in text for keyword in keywords):
+            matches.append(link.get_text(strip=True) + " - " + link["href"])
 
-            # Search for relevant links
-            links = soup.find_all("a", href=True)
-            matches = [link.get_text(strip=True) for link in links if "lecturer" in link.get_text(strip=True).lower() or "wbcs" in link.get_text(strip=True).lower()]
-
-            if matches:
-                msg = f"{title}:\n" + "\n".join(matches)
-                messages.append(msg)
-            else:
-                messages.append(f"{title}:\nNo new notification as of now.")
-
-        except Exception as e:
-            messages.append(f"{title}:\nError fetching data: {e}")
-
-    return "\n\n".join(messages)
+    if not matches:
+        return "No relevant WBPSC/WBCS notifications found as of now."
+    return "\n".join(matches)
 
 def generate_pdf(content, filename="notification.pdf"):
-    print("[*] Generating PDF...")
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -56,12 +44,10 @@ def generate_pdf(content, filename="notification.pdf"):
     pdf.output(filename)
 
 def send_email(subject, body, attachment_path):
-    print("[*] Sending email...")
     msg = MIMEMultipart()
     msg["From"] = sender_email
     msg["To"] = receiver_email
     msg["Subject"] = subject
-
     msg.attach(MIMEText(body, "plain"))
 
     with open(attachment_path, "rb") as f:
@@ -75,13 +61,11 @@ def send_email(subject, body, attachment_path):
             server.login(sender_email, app_password)
             server.send_message(msg)
         print("[✓] Email sent successfully.")
-    except smtplib.SMTPAuthenticationError as e:
-        print("[!] SMTP Authentication error:", e)
     except Exception as e:
         print("[!] Failed to send email:", e)
 
 if __name__ == "__main__":
-    print("[*] Running notification script at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    message = scrape_notifications()
-    generate_pdf(message)
-    send_email("WBPSC/WBCS Notification Update", message, "notification.pdf")
+    print("[*] Running script at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    content = scrape_indgovtjobs()
+    generate_pdf(content)
+    send_email("WBPSC/WBCS Notification Update", content, "notification.pdf")

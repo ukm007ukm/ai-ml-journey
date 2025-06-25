@@ -15,24 +15,27 @@ smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
 def scrape_indgovtjobs():
-    print("[*] Scraping indgovtjobs.in...")
-    url = "https://www.indgovtjobs.in/"
+    print("[*] Scraping West Bengal Jobs section...")
+    url = "https://www.indgovtjobs.in/search/label/West%20Bengal%20Jobs"
     headers = {"User-Agent": "Mozilla/5.0"}
-    
+
     response = requests.get(url, headers=headers, timeout=90)
     soup = BeautifulSoup(response.text, "html.parser")
 
-    keywords = ["wbpsc", "lecturer", "wbcs", "west bengal"]
-    links = soup.find_all("a", href=True)
+    # Grab all post titles and URLs
+    articles = soup.find_all("h3", class_="post-title entry-title")
+    keywords = ["wbpsc", "lecturer", "wbcs", "west bengal civil", "public service"]
 
     matches = []
-    for link in links:
-        text = link.get_text(strip=True).lower()
-        if any(keyword in text for keyword in keywords):
-            matches.append(link.get_text(strip=True) + " - " + link["href"])
+    for post in articles:
+        title = post.get_text(strip=True)
+        link = post.find("a")["href"]
+
+        if any(keyword in title.lower() for keyword in keywords):
+            matches.append(f"{title} - {link}")
 
     if not matches:
-        return "No relevant WBPSC/WBCS notifications found as of now."
+        return "No WBPSC/WBCS-specific notifications found as of now."
     return "\n".join(matches)
 
 def generate_pdf(content, filename="notification.pdf"):
